@@ -1,0 +1,114 @@
+#!/bin/bash
+# translate-moses-irstlm
+# version 1.03
+# author: João L. A. C. Rosas
+# date: 16/11/2009
+#---------------------------------------------------------------------------------------------------------------------------------------
+#THIS SCRIPT ASSUMES THAT A IRSTLM-ENABLED MOSES HAS ALREADY BEEN INSTALLED with create-moses-irstlm IN $mosesdir; ITS VALUE BY DEFAULT IS /home/user/moses-irstlm; CHANGE THIS VARIABLE IF, IN YOUR CASE, IT SHOULD REFER TO A DIFFERENT LOCATION
+#IT ALSO ASSUMES THE TRAINING OF A CORPUS HAS ALREADY BEEN DONE WITH train-moses-irstlm
+#---------------------------------------------------------------------------------------------------------------------------------------
+# The values of the variables that follow should be filled according to your needs:
+#---------------------------------------------------------------------------------------------------------------------------------------
+#Base path of Moses installation
+mosesdir=$HOME/moses-irstlm
+#Name of the trained corpus directory you want to use for translation (ommit the path!!!); you should use the following structure:{base name}-{source language abbreviation}-{target language abbreviation} (this corpus should already be present in $mosesdir/corpora_trained !!!)
+corpus_name=50000-en-pt-LM50000-Gram3-MM0-T0-MinLen1-MaxLen100-MaxPhraseLength3-12-11-2009_22:50
+## Order of ngrams that was used to train the trained corpus
+Gram=3
+#File for recaser training (specify full path)
+train_recaser_file=$mosesdir/corpora_for_training/1000.pt
+#---------------------------------------------------------------------------------------------------------------------------------------
+#end of parameters that you should fill
+#---------------------------------------------------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------------------------------------------------------
+# DON'T CHANGE THE LINES THAT FOLLOW ... unless you know what you are doing!
+#---------------------------------------------------------------------------------------------------------------------------------------
+lngmdl=1
+workdir=$mosesdir/work
+toolsdir=$mosesdir/tools
+docs_to_translate_dir=$mosesdir/translation_input
+translated_docs_dir=$mosesdir/translation_output
+if [ -d $docs_to_translate_dir ]; then
+	: #do nothing
+else
+	mkdir $docs_to_translate_dir
+	echo "You need to put the file(s) you want to translate in the $docs_to_translate_dir directory."
+	exit
+fi
+if [ -d $translated_docs_dir ]; then
+	: #do nothing
+else
+	mkdir $translated_docs_dir
+fi
+export SCRIPTS_ROOTDIR=$toolsdir/moses/scripts*
+#base directory of IRSTLM
+export IRSTLM=$toolsdir/irstlm
+#---------------------------------------------------------------------------------------------------------------------------------------
+#Save the present $mosesdir/work directory, if it exists (so that you don't loose any valuable previous work)
+if [ -d $workdir ]; then
+	if [ -d $mosesdir/bak ]; then
+		rm -rf $mosesdir/bak
+		mkdir $mosesdir/bak
+	else
+		mkdir $mosesdir/bak
+	fi
+	mv $mosesdir/work/ $mosesdir/bak
+	rm -rf $mosesdir/work/
+fi
+
+#Copy relevant trained corpus to its original location in $mosesdir/work
+cp -fR $mosesdir/corpora_trained/$corpus_name/ $mosesdir/work
+
+#Extract first language name
+lang1=${corpus_name#*-}
+lang1=${lang1%-*}
+#Extract second language name
+lang2=${corpus_name##*-}
+
+#If necessary, train recaser
+if [ -d $workdir/recaser ]; then
+	: #do nothing
+else
+	mkdir $workdir/recaser
+	cp $train_recaser_file $workdir/recaser/
+	cd $toolsdir/moses/script*
+	cd recaser
+	if (( $lngmdl == 1 )) ; then
+		sed -e 's#^.*my \$cmd.*NGRAM_COUNT.*$#\tmy $cmd = "toolsdir/irstlm/bin/build-lm.sh -t /tmp -i $CORPUS -n Gram -o $DIR/cased.irstlm.gz";#g' -e "s#toolsdir#$toolsdir#g" -e "s#Gram#$Gram#g" train-recaser.perl > train-recaser.perl.out
+		sed -e 's#^.*my \$cmd.*TRAIN\_SCRIPT.*$#\tmy $cmd = "$TRAIN_SCRIPT --root-dir $DIR --model-dir $DIR --first-step $first --alignment a --corpus $DIR/aligned --f lowercased --e cased --max-phrase-length $MAX_LEN --lm 1:Gram:$DIR/cased.irstlm.gz:0";#g' -e "s#Gram#$Gram#g" train-recaser.perl.out > train-recaser.perl
+		rm train-recaser.perl.out
+		chmod +x train-recaser.perl
+	fi
+	$toolsdir/moses/script*/recaser/train-recaser.perl -train-script $toolsdir/moses/script*/training/train-factored-phrase-model.perl -corpus $train_recaser_file -dir $workdir/recaser -scripts-root-dir $toolsdir/moses/scripts*
+	if (( $lngmdl == 1 )) ; then
+		sed -e 's#^.*cased.*$#1 0 Gram workdir/recaser/cased.irstlm.gz#g' -e "s#Gram#$Gram#g" -e "s#workdir#$workdir#g" $workdir/recaser/moses.ini > $workdir/recaser/moses.ini.out
+		mv $workdir/recaser/moses.ini.out $workdir/recaser/moses.ini
+	fi
+fi
+
+#Prepare and translate all the files in $docs_to_translate_dir; present the results in $translated_docs_dir
+mkdir $mosesdir/tmp
+tmp=$mosesdir/tmp
+for file_to_translate in $docs_to_translate_dir/*.*; do
+	name=${file_to_translate##*/}
+	$toolsdir/scripts/tokenizer.perl -l $lang1 < $file_to_translate > $tmp/$name.tok
+	$toolsdir/scripts/lowercase.perl < $tmp/$name.tok > $tmp/$name.lowercase
+	#Translate!
+	$toolsdir/moses/moses-cmd/src/moses -f $workdir/model/moses.ini -v 1 < $tmp/$name.lowercase > $tmp/$name
+	#Recase the output:
+	$toolsdir/moses/scripts*/recaser/recase.perl -model $workdir/recaser/moses.ini -in $tmp/$name -moses $toolsdir/moses/moses-cmd/src/moses > $tmp/$name.recased
+	#Detokenize the output:
+	$toolsdir/scripts/detokenizer.perl -l $lang2 < $tmp/$name.recased > $translated_docs_dir/$name
+done
+
+#Remove the now superfluous $mosesdir/temp directory
+rm -rf $mosesdir/tmp
+
+#If a previous $mosesdir/work was saved do $mosesdir/bak before the translation started, erase the present $mosesdir/work and move the previous $mosesdir/work to its original location; then erase the now superfluous $mosesdir/bak directory
+if [ -d $mosesdir/bak ]; then
+	rm -rf $mosesdir/work
+	mv $mosesdir/bak/work/ $mosesdir/work
+	rm -rf $mosesdir/bak
+fi
+

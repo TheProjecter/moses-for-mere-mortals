@@ -1,0 +1,210 @@
+#!/bin/bash
+# create-moses-irstlm
+# copyright 2009, João L. A. C. Rosas
+# date: 14/11/2009
+# version 1.10
+# licenced under the GPL, version 3, licence
+# this script is based on instructions from several different sources, especially the http://www.dlsi.ua.es/~mlf/fosmt-moses.html web page and the Moses manual (http://www.statmt.org/moses/manual/manual.pdf), as well as on research on the available literature on Moses
+# special thanks to H. Leal Fontes, who helped to test the script and made very helpful suggestions
+#--------------------------------------------------------------------------------------------------------------------------
+# The values of the variables that follow should be filled according to your needs:
+#--------------------------------------------------------------------------------------------------------------------------
+#Number of processors in your computer
+numprocessors=2
+#full path of the base directory location of your Moses system 
+mosesdir=$HOME/moses-irstlm
+giza=1
+irstlm=1
+moses=1
+mosesscripts=1
+democorpus=1
+domosestest=1
+
+#--------------------------------------------------------------------------------------------------------------------------
+#end of parameters that you should fill
+#--------------------------------------------------------------------------------------------------------------------------
+
+
+#--------------------------------------------------------------------------------------------------------------------------
+# DON'T CHANGE THE LINES THAT FOLLOW ... unless you know what you are doing!
+#--------------------------------------------------------------------------------------------------------------------------
+#base directory of your Moses scripts directory
+export SCRIPTS_ROOTDIR=$HOME/tools/moses/script*
+
+#full path of the directory where the files created while processing a corpus will be placed
+workdir=$mosesdir/work
+#full path of the directory where you placed the tools
+toolsdir=$mosesdir/tools
+
+#create, if need be, some important directories
+if [ -d $mosesdir ]; then
+	: #do nothing
+else
+	mkdir $mosesdir
+fi
+
+if [ -d $mosesdir/corpora_for_training ]; then
+	: #do nothing
+else
+	mkdir $mosesdir/corpora_for_training
+fi
+
+if [ -d $mosesdir/corpora_trained ]; then
+	: #do nothing
+else
+	mkdir $mosesdir/corpora_trained
+fi
+
+if [ -d $toolsdir ]; then
+	: #do nothing
+else
+	mkdir $toolsdir
+fi
+
+cd $toolsdir
+
+# Install GIZA++
+if [ "$giza" = "1" ]; then
+	svn checkout http://giza-pp.googlecode.com/svn/trunk/ giza-pp
+	#wget http://giza-pp.googlecode.com/files/giza-pp-v1.0.3.tar.gz
+	#tar -xzvf giza-pp-v1.0.3.tar.gz
+	cd $toolsdir/giza-pp
+	sed -e "s#char time_stmp\[17\]#char time_stmp\[37\]#g" -e "s#\%02d\-\%02d\-\%02d#\%04d\-\%02d\-\%02d#g" -e 's#local->tm_year#1900 + local->tm_year#g' $toolsdir/giza-pp/GIZA++-v2/file_spec.h > $toolsdir/giza-pp/GIZA++-v2/file_spec.h.new
+	mv $toolsdir/giza-pp/GIZA++-v2/file_spec.h.new $toolsdir/giza-pp/GIZA++-v2/file_spec.h
+	make
+	cd $toolsdir/
+	#rm giza-pp-v1.0.3.tar.gz
+
+	if [ -d $toolsdir/bin ]; then
+		: #do nothing
+	else
+		mkdir $toolsdir/bin
+	fi
+
+	cp $toolsdir/giza-pp/GIZA++-v2/GIZA++ $toolsdir/bin/
+	cp $toolsdir/giza-pp/mkcls-v2/mkcls $toolsdir/bin/
+	cp $toolsdir/giza-pp/GIZA++-v2/snt2cooc.out $toolsdir/bin/
+	cp $toolsdir/giza-pp/GIZA++-v2/snt2plain.out $toolsdir/bin/
+	cp $toolsdir/giza-pp/GIZA++-v2/plain2snt.out $toolsdir/bin/
+	if [ -f $toolsdir/bin/snt2plain.out ]; then
+		: # do nothing
+	else
+		echo "GIZA not correctly installed. The script will now exit."
+		exit
+	fi
+fi
+
+#Install IRSTLM
+if [ "$irstlm" = "1" ]; then
+	cd $toolsdir
+	svn co https://irstlm.svn.sourceforge.net/svnroot/irstlm irstlm
+	cd $toolsdir/irstlm
+	./regenerate-makefiles.sh
+	./configure --prefix=$toolsdir/irstlm
+	make
+	make install
+	if [ -f $toolsdir/irstlm/bin/i686/quantize-lm ]; then
+		: #do nothing
+	else
+		echo "IRSTLM not correctly installed. Script will now exit."
+		exit
+	fi
+fi
+
+export PATH=$toolsdir/irstlm/bin/i686:$toolsdir/irstlm/bin:$PATH
+
+#Install Moses
+if [ "$moses" = "1" ]; then
+	cd $toolsdir
+	if [ -d $toolsdir/moses ]; then
+		: #do nothing
+	else
+		mkdir $toolsdir/moses
+	fi
+
+	svn co https://mosesdecoder.svn.sourceforge.net/svnroot/mosesdecoder/trunk moses
+	cd $toolsdir/moses
+	./regenerate-makefiles.sh
+	./configure --with-irstlm=$toolsdir/irstlm 
+	make -j $numprocessors
+
+	cd $toolsdir/moses/scripts
+	sed -e 's#^TARGETDIR=.*$#TARGETDIR='"$toolsdir"'/moses#g' -e 's#^BINDIR=.*$#BINDIR='"$toolsdir"'/bin#g' $toolsdir/moses/scripts/Makefile > $toolsdir/moses/scripts/Makefile.new
+	mv $toolsdir/moses/scripts/Makefile.new $toolsdir/moses/scripts/Makefile
+	chmod +x $toolsdir/moses/scripts/Makefile
+	make release
+	rm -rf $toolsdir/moses/scripts
+
+	if [ -f $toolsdir/moses/moses-cmd/src/moses ]; then
+		: # Do nothing
+	else
+		echo "Moses wasn't correctly installed. Script will now exit."
+		exit
+	fi
+	export SCRIPTS_ROOTDIR=$toolsdir/moses/scripts/
+fi
+
+#Install Moses scripts
+if [ "$mosesscripts" = "1" ]; then
+	cd $toolsdir
+	wget http://homepages.inf.ed.ac.uk/jschroe1/how-to/scripts.tgz
+	tar -xzvf scripts.tgz
+	rm scripts.tgz
+	if [ -f $toolsdir/scripts/tokenizer.perl ]; then
+		: # Do nothing
+	else
+		echo "Moses scripts weren't correctly copied. Script will now exit."
+		exit
+	fi
+
+	cd $toolsdir/scripts/nonbreaking_prefixes
+	wget http://moses-for-mere-mortals.googlecode.com/files/nonbreaking_prefix.pt
+
+	cd $toolsdir
+	wget ftp://jaguar.ncsl.nist.gov/mt/resources/mteval-v11b.pl
+	chmod +x mteval-v11b.pl
+	if [ -f $toolsdir/mteval-v11b.pl ]; then
+		: # Do nothing
+	else
+		echo "mteval-v11b.pl wasn't correctly copied. Script will now exit."
+		exit
+	fi
+fi
+
+#Install a small demonstration corpus
+if [ "$democorpus" = "1" ]; then
+	cd $mosesdir
+	wget http://moses-for-mere-mortals.googlecode.com/files/corpora_for_training.tar.gz
+	tar -xzvf corpora_for_training.tar.gz
+	rm corpora_for_training.tar.gz
+	if [ -f $mosesdir/corpora_for_training/1000.en ]; then
+		: # Do nothing
+	else
+		echo "Demo corpus wasn't correctly installed."
+	fi
+fi
+
+#Launch the "official" Moses test
+if [ "$domosestest" = "1" ]; then
+	cd $toolsdir
+	if [ -d $mosesdir/test ]; then
+		: #do nothing
+	else
+		mkdir $mosesdir/test
+	fi
+	cd $mosesdir/test
+	wget http://www.statmt.org/moses/download/sample-models.tgz
+	tar -xzvf sample-models.tgz
+	if [ -d $mosesdir/test/sample-models ]; then
+		cd $mosesdir/test/sample-models/phrase-model/
+		$toolsdir/moses/moses-cmd/src/moses -f moses.ini < in > out
+		cd $mosesdir
+	else
+		echo "Moses corpus for testing installation wasn't correctly installed."
+	fi
+	rm -r test/
+fi
+#--------------------------------------------------------------------------------------------------------------------------
+#end of moses installation
+#--------------------------------------------------------------------------------------------------------------------------
+

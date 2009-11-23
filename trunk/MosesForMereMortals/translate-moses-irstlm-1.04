@@ -1,0 +1,177 @@
+#!/bin/bash
+# translate-moses-irstlm
+# version 1.04
+# author: João L. A. C. Rosas
+# date: 19/11/2009
+#---------------------------------------------------------------------------------------------------------------------------------------
+#THIS SCRIPT ASSUMES THAT A IRSTLM-ENABLED MOSES HAS ALREADY BEEN INSTALLED with create-moses-irstlm IN $mosesdir; ITS VALUE BY DEFAULT IS /home/user/moses-irstlm; CHANGE THIS VARIABLE IF, IN YOUR CASE, IT SHOULD REFER TO A DIFFERENT LOCATION
+#IT ALSO ASSUMES THE TRAINING OF A CORPUS HAS ALREADY BEEN DONE WITH train-moses-irstlm
+#IT FINALLY ASSUMES THAT YOU HAVE PLACED THE DOCUMENTS TO BE TRANSLATED IN THE $mosesdir/translation_input DIRECTORY
+#---------------------------------------------------------------------------------------------------------------------------------------
+# The values of the variables that follow should be filled according to your needs:
+#---------------------------------------------------------------------------------------------------------------------------------------
+#NOTE: the present script doesn't test whether a translation already done exists with the same name of a translation you now ask; it therefore will be erased !!!
+
+#Base path of Moses installation
+mosesdir=$HOME/moses-irstlm
+#Name of the trained corpus directory you want to use for translation (ommit the path!!!); LEAVE EMPTY IF YOU WANT TO USE THE CORPUS CURRENTLY PRESENT IN THE $work dir DIRECTORY !!!; if you want to specify a different corpus, you should use the following structure:{base name}-{source language abbreviation}-{target language abbreviation} (easiest thing to do: copy and paste the name of a corpus present in $mosesdir/corpora_trained) !!! MAKE SURE THIS IS A CORRECTLY TRAINED CORPUS !!!
+corpus_name=
+#The next 2 parameters will only be used by this script in case $corpus_name isn't assigned any value; it must specify the languages being used in the corpus currently present in $workdir; it is up to you to check that they are correctly specified !!! THE LANGUAGE ABBREVIATION SHOULD CONTAIN EXACTLY 2 CHARACTERS !!!
+lng1=en
+lng2=pt
+## Order of ngrams that was used to train the trained corpus; it is up to you to check that it is correctly specified !!!
+Gram=5
+#File for recaser training (specify full path)
+train_recaser_file=$mosesdir/corpora_for_training/1000.pt
+#Create a translation report when translations are finished; 1 = Do; Any other value = Don't
+create_translation_report=1
+#---------------------------------------------------------------------------------------------------------------------------------------
+#end of parameters that you should fill
+#---------------------------------------------------------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------------------------------------------------------------------
+# DON'T CHANGE THE LINES THAT FOLLOW ... unless you know what you are doing!
+#---------------------------------------------------------------------------------------------------------------------------------------
+startdate=`date +day:%d/%m/%y-time:%H:%M:%S`
+echo "********************************** PREPARATORY WORK:"
+workdir=$mosesdir/work
+control_c() {
+	if [ -f $workdir/model/moses.ini.bak.tuning ]; then
+		cp $workdir/model/moses.ini.bak.tuning $workdir/model/moses.ini
+	elif [ -f $workdir/model/moses.ini.bak.memmap ]; then
+		cp $workdir/model/moses.ini.bak.memmap $workdir/model/moses.ini
+	elif [ -f $workdir/model/moses.ini.bak.train ]; then
+		cp $workdir/model/moses.ini.bak.train $workdir/model/moses.ini
+	fi
+	exit
+}
+
+trap control_c SIGINT
+
+lngmdl=1
+toolsdir=$mosesdir/tools
+docs_to_translate_dir=$mosesdir/translation_input
+translated_docs_dir=$mosesdir/translation_output
+if [ -d $docs_to_translate_dir ]; then
+	: #do nothing
+else
+	mkdir $docs_to_translate_dir
+	echo "You need to put the file(s) you want to translate in the $docs_to_translate_dir directory."
+	exit
+fi
+if [ -d $translated_docs_dir ]; then
+	: #do nothing
+else
+	mkdir $translated_docs_dir
+fi
+export SCRIPTS_ROOTDIR=$toolsdir/moses/scripts*
+#base directory of IRSTLM
+export IRSTLM=$toolsdir/irstlm
+#---------------------------------------------------------------------------------------------------------------------------------------
+
+#If corpus_name specified and different from $workdir, save the present $mosesdir/work directory, if it exists (so that you don't loose any valuable previous work)
+if [[ ${corpus_name-_} ]]; then
+	if [ "$(ls -A $workdir)" ]; then
+		if [ -d $mosesdir/bak ]; then
+			rm -rf $mosesdir/bak
+			mkdir $mosesdir/bak
+		else
+			mkdir $mosesdir/bak
+		fi
+		mv $mosesdir/work/ $mosesdir/bak
+		rm -rf $mosesdir/work/
+	fi
+
+	#Copy relevant trained corpus to its original location in $mosesdir/work
+	cp -rf $mosesdir/corpora_trained/$corpus_name/ $workdir
+	#Extract first language name
+	lang1temp=${corpus_name#*-}
+	lang1=${lang1temp:0:2}
+	#Extract second language name
+	lang2=${lang1temp:3:2}
+else
+	if [ ! -d $workdir ]; then
+		echo "If you do not specify a corpus name, this script uses the trained corpus in $workdir. There is no such corpus in that location."
+		exit 0
+	fi
+	lang1=$lng1
+	lang2=$lng2
+fi
+
+#Check training was done correctly in the specified corpus
+if [ ! -f $workdir/model/moses.ini ]; then
+	echo "The trained corpus you are trying to use wasn't correctly trained or does not exist. Please retrain it or use another trained corpus. Exiting ..."
+	exit 0
+fi
+
+#Prepare and translate all the files in $docs_to_translate_dir; present the results in $translated_docs_dir
+if [ ! -d $mosesdir/tmp ]; then
+	mkdir $mosesdir/tmp
+fi
+tmp=$mosesdir/tmp
+
+echo "********************************** TRANSLATE:"
+for filetotranslate in $docs_to_translate_dir/*.*; do
+	if [[ ${filetotranslate-_} ]]; then
+		name=${filetotranslate##*/}
+		$toolsdir/scripts/tokenizer.perl -l $lang1 < $filetotranslate > $tmp/$name.tok
+		$toolsdir/scripts/lowercase.perl < $tmp/$name.tok > $tmp/$name.lowercase
+		#Translate!
+		$toolsdir/moses/moses-cmd/src/moses -f $workdir/model/moses.ini < $tmp/$name.lowercase > $tmp/$name
+		#Recase the output:
+		$toolsdir/moses/scripts*/recaser/recase.perl -model $workdir/recaser/moses.ini -in $tmp/$name -moses $toolsdir/moses/moses-cmd/src/moses > $tmp/$name.recased
+		#Detokenize the output:
+		$toolsdir/scripts/detokenizer.perl -l $lang2 < $tmp/$name.recased > $translated_docs_dir/$name
+	else
+		echo "The \$translation_input directory has no documents to be translated. You should place there the documents you want to translate."
+		exit
+	fi
+done
+
+#Remove the now superfluous $mosesdir/temp directory
+rm -rf $mosesdir/tmp
+
+#If a previous $mosesdir/work was saved do $mosesdir/bak before the translation started, erase the present $mosesdir/work and move the previous $mosesdir/work to its original location; then erase the now superfluous $mosesdir/bak directory
+if [ -d $mosesdir/bak ]; then
+	rm -rf $mosesdir/work
+	mv $mosesdir/bak/work/ $mosesdir/work
+	rm -rf $mosesdir/bak
+fi
+
+if [ $create_translation_report -eq 1 ]; then
+	echo "********************************** BUILDING TRANSLATION REPORT:"
+	echo "*** Script version ***: translate-moses-irstlm-1.04" > $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** Duration ***: " >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "Start time:           $startdate" >> $mosesdir/translation_output/translation_summary
+	echo "End time:             `date +day:%d/%m/%y-time:%H:%M:%S`" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** Moses base directory ***: $mosesdir" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** Languages*** :" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "Source language: $lang1" >> $mosesdir/translation_output/translation_summary
+	echo "Destination language: $lang2" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** Trained corpus used ***:" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	if [[ ${corpus_name-_} ]]; then	
+		echo "$corpus_name" >> $mosesdir/translation_output/translation_summary
+	else
+		echo "Trained corpus present in $workdir" >> $mosesdir/translation_output/translation_summary
+	fi
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** Translated Files ***:" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	for filetotranslate in $docs_to_translate_dir/*.*; do
+		if [[ ${filetotranslate-_} ]]; then
+			echo ${filetotranslate##*/} >> $mosesdir/translation_output/translation_summary
+		fi
+	done
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "*** General Settings *** :" >> $mosesdir/translation_output/translation_summary
+	echo "------------------------------------------------------------------------" >> $mosesdir/translation_output/translation_summary
+	echo "lngmdl=$lngmdl (0 = SRILM; 1 = IRSTLM; 5 = RandLM)" >> $mosesdir/translation_output/translation_summary
+fi
+

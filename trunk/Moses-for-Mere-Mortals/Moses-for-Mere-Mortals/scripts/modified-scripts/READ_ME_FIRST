@@ -1,0 +1,2 @@
+1) The mert-moses-new-modif.pl is a file that contains a slight modification of the mert-moses-new.pl script published  on February 15, 2010 in the mosesdecoder site (http://mosesdecoder.svn.sourceforge.net/viewvc/mosesdecoder/trunk/). This file is covered by the GNU Library or Lesser General Public License (LGPL), whose text has also been added to this directory.
+2) The nonbreaking_prefix.pt script is a file whose author is Hilário Leal Fontes.

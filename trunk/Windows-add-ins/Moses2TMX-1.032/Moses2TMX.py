@@ -5,15 +5,15 @@ language file.
 
 The program requires that Pythoncard and wxPython (as well as Python) be previously installed.
 
-Copyright 2009, 2010 JoÃ£o L. A. C. Rosas
+Copyright 2009, 2010 João Luís A. C. Rosas
 
 Distributed under GNU GPL v3 licence (see http://www.gnu.org/licenses/)
 
-E-mail: extracttmxcorpus@gmail.com """
+E-mail: joao.luis.rosas@gmail.com """
 
 __version__ = "$Revision: 1.032$"
 __date__ = "$Date: 2010/02/25$"
-__author__="$JoÃ£o L. A. C. Rosas$"
+__author__="$João Luís A. C. Rosas$"
 
 from PythonCard import clipboard, dialog, graphic, model
 from PythonCard.components import button, combobox,statictext,checkbox,staticbox

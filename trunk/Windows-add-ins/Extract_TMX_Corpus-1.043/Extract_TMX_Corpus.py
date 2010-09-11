@@ -12,16 +12,16 @@ in other formats, if need be.
 
 The program requires that Pythoncard and wxPython (as well as Python) be previously installed.
 
-Copyright 2009, JoÃ£o L. A. C. Rosas
+Copyright 2009, João Luís A. C. Rosas
 
 Distributed under GNU GPL v3 licence (see http://www.gnu.org/licenses/)
 
-E-mail: extracttmxcorpus@gmail.com """
+E-mail: joao.luis.rosas@gmail.com """
 
 __version__ = "$Revision: 1.042$"
 __date__ = "$Date: 2010/03/25$"
-__author__="$JoÃ£o L. A. C. Rosas$"
-#Special thanks to Gary Daine for a helpful suggestion about a regex expression
+__author__="$João Luís A. C. Rosas$"
+#Special thanks to Gary Daine for a helpful suggestion about a regex expression and for suggestions for this program to cover even more translation memories
 
 from PythonCard import clipboard, dialog, graphic, model
 from PythonCard.components import button, combobox,statictext,checkbox,staticbox

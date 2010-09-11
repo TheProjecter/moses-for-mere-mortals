@@ -11,7 +11,7 @@ Summary:
 ****************************************************************************
 PURPOSE:
 ****************************************************************************
-Extract_Tmx_Corpus_1.042 is a Windows program (Vista and XP supported) that enables translators not necessarily with a deep knowledge of linguistic tools to create highly customised corpora that can be used with the Moses machine translation system and with other systems. Some users call it "et cetera", playing a bit with its initials (ETC) and meaning that it can treat a never-ending number of files. 
+Extract_Tmx_Corpus_1.043 is a Windows program (Windows 7, Vista and XP supported) that enables translators not necessarily with a deep knowledge of linguistic tools to create highly customised corpora that can be used with the Moses machine translation system and with other systems. Some users call it "et cetera", playing a bit with its initials (ETC) and meaning that it can treat a never-ending number of files. 
 
 In order to create corpora that are most useful to train machine translation systems, one should strive to include segments that are relevant for the task in hand. One of the ways of finding such segments could involve the usage of previous translation memory files (TMX files). This way the corpora could be customised for the person or for the type of task in question. The present program uses such files as input.
 
@@ -32,7 +32,7 @@ The program accepts and preserves text in any language (including special diacri
 ****************************************************************************
 REQUIREMENTS: 
 ****************************************************************************
-These requirements only apply if you want to compile the program from source. If you have downloaded the Windows executable you do not have to do anything.
+These requirements only apply if you want to use the program from source. If you have downloaded the Windows executable you do not have to do anything.
 The program requires the following to be pre-installed in your computer:
 
 1) Python 2.5 (http://www.python.org/download/releases/2.5.4/);
@@ -44,7 +44,7 @@ NOTE2: if you use Windows Vista, launch the following installation programs by r
 ****************************************************************************
 INSTALLATION:
 ****************************************************************************
-1) Download the Extract_TMX_Corpus_1.041.exe file.
+1) Download the Extract_TMX_Corpus_1.043.exe file.
 2) Double-click it and follow the wizard instructions.
 ***IMPORTANT***: Never erase the file "LanguageCodes.txt" in that directory. It is necessary for telling the program the languages that it has to process. If your TMX files use language codes that are different from those contained in this file, please replace the codes contained in the file with the codes used in your TMX files. You can always add or delete new codes to this file (when the program is not running).
 
@@ -98,7 +98,7 @@ You can now feed Moses your customised corpora :-)
 ****************************************************************************
 THANKS:
 ****************************************************************************
-Thanks to Gary Daine, who pointed out a way to improve one of the regex expressions used in the code.
+Thanks to Gary Daine, who pointed out a way to improve one of the regex expressions used in the code and suggested changes needed for it to cover more translation memories.
 ****************************************************************************
 LICENSE:
 ****************************************************************************
